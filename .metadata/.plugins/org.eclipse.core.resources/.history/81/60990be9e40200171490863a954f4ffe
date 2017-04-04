@@ -1,0 +1,80 @@
+package TDM.Neo4j;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Scanner;
+
+public class SubgraphMatching {
+	
+	HashMap<String, Label> labels = new HashMap();
+	ArrayList<WhereClause> wheres = new ArrayList();
+	ArrayList<Edge> edges = new ArrayList();
+
+	public static void main(String[] args) {
+		
+	}
+	
+	
+	public String parseEdges(){
+		String cypherText = "";
+		Scanner s = new Scanner(System.in);
+		while(s.hasNext()){
+			String token = s.nextLine();
+			String tokens[] = token.split(" ");
+			if(tokens.length == 3 ){
+				Label label = new Label(tokens[0], tokens[1]);
+				labels.put(tokens[0], label);
+				String[] clauseValues = tokens[2].split("=");
+				WhereClause where = new WhereClause(label, clauseValues[0], clauseValues[1]);
+				wheres.add(where);
+			}
+			else{
+				edges.add(new Edge(labels.get(tokens[0]), labels.get(tokens[1])));
+			}
+		}
+		return cypherText;
+	}
+}
+
+class Edge{
+	Label from, to;
+	
+	public Edge(Label from, Label to){
+		this.from = from;
+		this.to = to;
+	}
+	
+	public String toString(){
+		return "("+from.token+":"+from.name+")"+"--"+"("+from.token+":"+from.name+")";
+	}
+}
+
+class Label{
+	String token, name;
+	
+	public Label(String token, String name){
+		this.token = token;
+		this.name = name;
+	}
+	
+	public String toString(){
+		return token+":"+name;
+	}
+}
+
+
+class WhereClause{
+	Label label;
+	String property;
+	String value;
+	
+	public WhereClause(Label label,	String property, String value){
+		this.label = label;
+		this.property = property;
+		this.value = value;
+	}
+	
+	public String toString(){
+		return label.token+"."+property+"="+value; 
+	}
+}

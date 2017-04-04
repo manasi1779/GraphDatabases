@@ -1,0 +1,62 @@
+package TDM.Neo4j;
+
+import java.util.ArrayList;
+import java.util.Scanner;
+
+public class SubgraphMatching {
+	
+	ArrayList<Label> labels = new ArrayList();
+	ArrayList<WhereClause> wheres = new ArrayList();
+
+	public static void main(String[] args) {
+		
+	}
+	
+	
+	public String parseEdges(){
+		String cypherText = "";
+		Scanner s = new Scanner(System.in);
+		while(s.hasNext()){
+			String token = s.nextLine();
+			String tokens[] = token.split(" ");
+			if(tokens.length == 3 ){
+				Label label = new Label(tokens[0], tokens[1]);
+				labels.add(label);
+				String clauseValues = tokens[2].split("=");
+				WhereClause where = new WhereClause(label, ); 
+			}
+		}
+		return cypherText;
+	}
+}
+
+
+class Label{
+	String token, name;
+	
+	public Label(String token, String name){
+		this.token = token;
+		this.name = name;
+	}
+	
+	public String toString(){
+		return token+":"+name;
+	}
+}
+
+
+class WhereClause{
+	Label label;
+	String property;
+	String value;
+	
+	public WhereClause(Label label,	String property, String value){
+		this.label = label;
+		this.property = property;
+		this.value = value;
+	}
+	
+	public String toString(){
+		return label.token+"."+property+"="+value; 
+	}
+}

@@ -1,0 +1,15 @@
+import java.io.File;
+
+public class CreateIgraphQueries {
+	
+	File fileEntry = new File("C:/Manasi/workspace/TDM/Graph/data/iGraph/query");
+
+	public static void main(String[] args) {
+		
+	}
+	
+	public void createFile(){
+		
+	}
+
+}

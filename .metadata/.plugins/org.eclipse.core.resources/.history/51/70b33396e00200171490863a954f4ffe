@@ -1,0 +1,39 @@
+package TDM.Neo4j;
+
+import java.util.Scanner;
+
+public class SubgraphMatching {
+	
+	
+
+	public static void main(String[] args) {
+		
+	}
+	
+	
+	public String parseEdges(){
+		String cypherText = "";
+		Scanner s = new Scanner(System.in);
+		while(s.hasNext()){
+			String token = s.nextLine();
+			String tokens[] = token.split(" ");
+			if(tokens.length == 3 ){
+				
+			}
+		}
+		return cypherText;
+	}
+}
+
+class Label{
+	String token, name;
+	
+	public Label(String token, String name){
+		this.token = token;
+		this.name = name;
+	}
+	
+	public String toString(){
+		return token+":"+name;
+	}
+}

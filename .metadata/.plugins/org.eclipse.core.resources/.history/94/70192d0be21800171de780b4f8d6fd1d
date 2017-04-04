@@ -1,0 +1,74 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>Proteins</groupId>
+  <artifactId>Graph</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <name>Proteins</name>
+  
+    <dependencies>
+  <dependency>
+     <groupId>org.neo4j</groupId>
+     <artifactId>neo4j</artifactId>
+     <version>3.1.1</version>
+     <scope>provided</scope>
+   </dependency>
+   <dependency>
+    <groupId>org.neo4j</groupId>
+    <artifactId>neo4j-kernel</artifactId>
+    <version>3.1.1</version>
+	</dependency>
+    <dependency>
+    <groupId>org.neo4j</groupId>
+    <artifactId>neo4j-graphdb-api</artifactId>
+    <version>3.1.1</version>
+	</dependency>
+	<dependency>
+	    <groupId>org.neo4j</groupId>
+	    <artifactId>neo4j-common</artifactId>
+	    <version>3.1.1</version>
+	</dependency>
+	<dependency>
+	    <groupId>org.neo4j</groupId>
+	    <artifactId>neo4j-jdbc-driver</artifactId>
+	    <version>3.0.1</version>
+	</dependency>
+	<dependency>
+	    <groupId>org.neo4j</groupId>
+	    <artifactId>neo4j-jdbc-bolt</artifactId>
+	    <version>3.0.1</version>
+	</dependency>
+	<dependency>
+	    <groupId>org.neo4j</groupId>
+	    <artifactId>neo4j-jdbc-http</artifactId>
+	    <version>3.0.1</version>
+	</dependency>
+    <dependency>
+        <groupId>org.neo4j.driver</groupId>
+        <artifactId>neo4j-java-driver</artifactId>
+        <version>1.1.2</version>
+    </dependency>
+    <dependency>
+    <groupId>com.google.code.gson</groupId>
+    <artifactId>gson</artifactId>
+    <version>2.2.4</version>
+	</dependency>
+	<dependency>
+	    <groupId>com.google.code.geocoder-java</groupId>
+	    <artifactId>geocoder-java</artifactId>
+	    <version>0.16</version>
+	</dependency>
+	<dependency>
+    <groupId>com.google.code.javaparser</groupId>
+    <artifactId>javaparser</artifactId>
+    <version>1.0.11</version>
+</dependency>
+	
+	<dependency>
+    <groupId>com.google.code.gson</groupId>
+    <artifactId>gson-parent</artifactId>
+    <version>2.8.0</version>
+</dependency>
+  </dependencies>
+  
+  
+</project>

@@ -1,0 +1,238 @@
+package TDM.Neo4j;
+
+import java.io.File;
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.RelationshipType;
+import org.neo4j.graphdb.Transaction;
+import org.neo4j.graphdb.factory.GraphDatabaseFactory;
+import org.neo4j.graphdb.factory.GraphDatabaseSettings;
+import org.neo4j.graphdb.schema.IndexCreator;
+import org.neo4j.kernel.impl.store.InvalidRecordException;
+import org.neo4j.unsafe.batchinsert.BatchInserter;
+import org.neo4j.unsafe.batchinsert.BatchInserters;
+
+
+
+public class Neo4jBatch {
+
+	GraphDatabaseService db;
+	Transaction tx;
+	BatchInserter insert;
+	File dbpath;
+	static HashMap<String, Integer> offsetID = new HashMap();
+	HashMap<String, Long> genreTable = new HashMap();
+	
+	public static void main(String[] args) {
+		Neo4jBatch dbInstance = new Neo4jBatch();
+		dbInstance.getData();		
+		
+	}
+	
+	static {
+		offsetID.put("movie", 1000000);
+		offsetID.put("actor", 2000000);
+		offsetID.put("director", 3000000);
+		
+	}
+	
+	public Neo4jBatch(){
+		dbpath = new File("D:/neo4j-enterprise-3.1.1-windows/neo4j-enterprise-3.1.1/data/databases/graph.db");
+		/*GraphDatabaseSettings.BoltConnector bolt = GraphDatabaseSettings.boltConnector("0");
+		GraphDatabaseFactory dbFactory = new GraphDatabaseFactory();
+		db = dbFactory.newEmbeddedDatabaseBuilder(dbpath).setConfig(bolt.enabled, "true")
+			    .setConfig(bolt.address, "localhost:7687")
+			    .newGraphDatabase();*/
+	}
+	
+
+	public void getData(){
+		try {
+    		Class.forName("com.mysql.jdbc.Driver");
+    	} catch (ClassNotFoundException e1) {
+    		e1.printStackTrace();
+    	}
+		try(Connection con=DriverManager.getConnection(  
+    			"jdbc:mysql://localhost:3306/imdb","root","root");){
+			loadData(con);
+    	}catch(SQLException e1){
+    		e1.printStackTrace();
+    	}		
+	}
+	
+	public void connectNeo4j(){
+		/*Driver driver = GraphDatabase.driver( "bolt://localhost:7474", AuthTokens.basic( "neo4j", "graph" ) );
+		GraphDatabase
+		tx = driver.session().beginTransaction();*/
+	}
+
+	public void loadData(Connection con){
+		try {
+			DatabaseMetaData md = con.getMetaData();
+    		ResultSet rs  = md.getTables(null, null, "%", null);
+    		ArrayList<String> relationTables = new ArrayList<String>();
+    		insert = BatchInserters.inserter(dbpath);
+    		while(rs.next()){
+    			if(rs.getString(3).contains("_") || rs.getString(3).equals("roles"))
+    				relationTables.add(rs.getString(3));
+    			else{
+	    			ArrayList<String> columns = getTableDefinition(rs.getString(3), md);
+	    			loadTableData(rs.getString(3), con.createStatement(), columns);
+    			}
+    		}
+    		createRoleRelationships(con.createStatement());
+    		createDirectorRelationships(con.createStatement());
+    		addGenreNodes(con.createStatement());
+    		createMovieGenreRelationship(con.createStatement());
+    		createDirectorGenreRelationship(con.createStatement());
+    		con.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} 
+	}
+	
+	private Entities getEntity(String tableName){
+		switch(tableName){
+		case "actors":
+			return Entities.actor;
+		case "directors":
+			return Entities.director;
+		case "movies":
+			return Entities.movie;
+		default:
+			return Entities.genre;
+		}
+	}	
+	
+	private void loadTableData(String tableName, Statement createStatement, ArrayList<String> tableDefinition) {
+		try (ResultSet rs = createStatement.executeQuery("select * from "+tableName+";");){			
+			System.out.println("Adding data to "+tableName);			
+			while(rs.next()){				
+				HashMap<String, Object> nodeMap = new HashMap();
+				long id = 0;
+				for(String column: tableDefinition){
+					Object value = rs.getObject(column);
+					if(column.equals("id")){
+						id = convertID((int)value, tableName.substring(0, tableName.length()-1));
+					}
+					else if(!column.equals("rank")){
+						nodeMap.put(column, value);
+					}					
+				}
+				insert.createNode(id, nodeMap, getEntity(tableName));
+			}
+			IndexCreator indexCreator = insert.createDeferredSchemaIndex(getEntity(tableName));
+			indexCreator.on("id").create();			
+			createStatement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}		
+	}
+	
+	public void addGenreNodes(Statement createStatement){
+		try(ResultSet rs = createStatement.executeQuery("select distinct(genre) from movies_genres;");){
+			while(rs.next()){
+				Map<String, Object> params = new HashMap<>();
+				params.put("genre", rs.getString("genre"));
+				genreTable.put(rs.getString("genre"), insert.createNode(params, Entities.genre));
+			}
+			createStatement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void createRoleRelationships(Statement createStatement){
+		try(ResultSet rs = createStatement.executeQuery("select * from roles;");) {
+			while(rs.next()){
+				Map<String, Object> params = new HashMap<>();
+				params.put("role", rs.getString("role"));
+				insert.createRelationship(offsetID.get("actor")+Long.parseLong(rs.getString("actor_id")), offsetID.get("movie")+Long.parseLong(rs.getString("movie_id")), Relationship.role, params);
+			}
+			createStatement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void createDirectorRelationships(Statement createStatement){
+		try(ResultSet rs = createStatement.executeQuery("select * from movies_directors;");){
+			while(rs.next()){
+				try{
+					insert.createRelationship(offsetID.get("movie")+Long.parseLong(rs.getString("movie_id")), offsetID.get("director")+Long.parseLong(rs.getString("director_id")), Relationship.directed, null);
+				}catch(InvalidRecordException e){
+					System.out.println("ID not found");
+				}
+			}
+			createStatement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void createMovieGenreRelationship(Statement createStatement){
+		try(ResultSet rs = createStatement.executeQuery("select * from movies_genres;");){
+			while(rs.next()){
+				try{
+					insert.createRelationship(offsetID.get("movie")+Long.parseLong(rs.getString("movie_id")), genreTable.get(rs.getString("genre")), Relationship.movie_genre, null);
+				}catch(InvalidRecordException e){
+					System.out.println("ID not found");
+				}
+			}
+			createStatement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void createDirectorGenreRelationship(Statement createStatement){
+		try(ResultSet rs = createStatement.executeQuery("select * from directors_genres;");){
+			while(rs.next()){
+				try{
+					insert.createRelationship(offsetID.get("director")+Long.parseLong(rs.getString("director_id")), genreTable.get(rs.getString("genre")), Relationship.director_genre, null);
+				}catch(InvalidRecordException e){
+					System.out.println("ID not found");
+				}
+			}
+			createStatement.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
+	/**
+     * Method to get table definition
+     * @param tableName
+     * @param md
+     * @return
+     */
+    public ArrayList<String> getTableDefinition(String tableName, DatabaseMetaData md){
+    	ArrayList<String> tableDefinition = new ArrayList<String>();
+    	try(ResultSet rs = md.getColumns(null, null, tableName, "%");){
+			while(rs.next()){
+				tableDefinition.add(rs.getString(4));
+			}			
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+    	return tableDefinition;    	
+    }
+    
+    public long convertID(int id, String type){
+    	long offset = offsetID.get(type);
+    	return offset+id;
+    }
+}

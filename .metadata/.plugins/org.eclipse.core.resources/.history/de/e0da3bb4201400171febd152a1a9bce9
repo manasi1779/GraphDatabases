@@ -1,0 +1,42 @@
+import java.io.File;
+
+import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Transaction;
+import org.neo4j.unsafe.batchinsert.BatchInserter;
+
+public class iGraphLoadData {
+
+	String dbpath;
+	GraphDatabaseService db;
+	Transaction tx;
+	BatchInserter insert;
+
+	public static void main(String[] args) {
+		
+	}
+	
+	public iGraphLoadData(){
+		dbpath = "D:/neo4j-enterprise-3.1.1-windows/neo4j-enterprise-3.1.1/data/databases/graph.db";
+	}
+	
+	public void loadData(){
+		ClassLoader classLoader = getClass().getClassLoader();
+		File file = new File(classLoader.getResource("proteinGraph").getFile());
+	}
+
+	public void listFilesForFolder(final File folder) {
+	    for(final File fileEntry : folder.listFiles()){
+	    	loadFile(fileEntry);
+	    }
+	}
+	
+	public void loadFile(File fileName){
+		int dotIndex = fileName.getName().indexOf('.');
+		String newDir = fileName.getName().substring(0, dotIndex); 
+		newDir = dbpath+"/"+newDir;
+		File dir = new File(newDir);		
+		dir.mkdir();
+		insertProteinData(fileName, dir);
+	}	
+
+}

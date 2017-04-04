@@ -1,0 +1,5 @@
+import org.neo4j.graphdb.Label;
+
+public enum Atoms implements Label{
+	C, H, O, N, S
+}

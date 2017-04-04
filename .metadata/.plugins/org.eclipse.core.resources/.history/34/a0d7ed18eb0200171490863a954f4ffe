@@ -1,0 +1,99 @@
+package TDM.Neo4j;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Scanner;
+
+public class SubgraphMatching {
+	
+	HashMap<String, Label> labels = new HashMap();
+	ArrayList<WhereClause> wheres = new ArrayList();
+	ArrayList<Edge> edges = new ArrayList();
+
+	public static void main(String[] args) {
+		SubgraphMatching cypher = new SubgraphMatching();
+		cypher.parseEdges();
+		System.out.println(cypher.createCypher());
+	}	
+	
+	public void parseEdges(){
+		Scanner s = new Scanner(System.in);
+		int i = 8;
+		while(i-- > 0){
+			String token = s.nextLine();
+			String tokens[] = token.split(" ");
+			System.out.println(token);
+			if(tokens.length == 3 ){
+				Label label = new Label(tokens[0], tokens[1]);
+				labels.put(tokens[0], label);
+				String[] clauseValues = tokens[2].split("=");
+				WhereClause where = new WhereClause(label, clauseValues[0], clauseValues[1]);
+				wheres.add(where);
+			}
+			else{
+				edges.add(new Edge(labels.get(tokens[0]), labels.get(tokens[1])));
+			}
+			System.out.println(edges.size());
+		}
+	}
+	
+	public String createCypher(){
+		String cypherText = "MATCH\t";
+		for(Edge edge: edges){
+			cypherText+= edge+",";
+		}
+		cypherText = cypherText.substring(0, cypherText.length()-1)+"\nWHERE ";
+		for(WhereClause where: wheres){
+			cypherText+=where+"AND ";
+		}
+		cypherText = cypherText.substring(0, cypherText.length()-4)+"\nRETURN ";
+		for(String token: labels.keySet()){
+			cypherText+=token+",";
+		}
+		cypherText = cypherText.substring(0, cypherText.length()-1);
+		return cypherText;
+	}
+}
+
+class Edge{
+	Label from, to;
+	
+	public Edge(Label from, Label to){
+		this.from = from;
+		this.to = to;
+	}
+	
+	public String toString(){
+		return "("+from.token+":"+from.name+")"+"--"+"("+from.token+":"+from.name+")";
+	}
+}
+
+class Label{
+	String token, name;
+	
+	public Label(String token, String name){
+		this.token = token;
+		this.name = name;
+	}
+	
+	public String toString(){
+		return token+":"+name;
+	}
+}
+
+
+class WhereClause{
+	Label label;
+	String property;
+	String value;
+	
+	public WhereClause(Label label,	String property, String value){
+		this.label = label;
+		this.property = property;
+		this.value = value;
+	}
+	
+	public String toString(){
+		return label.token+"."+property+"="+value; 
+	}
+}

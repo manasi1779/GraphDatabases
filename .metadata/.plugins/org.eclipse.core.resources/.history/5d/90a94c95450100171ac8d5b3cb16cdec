@@ -1,0 +1,7 @@
+package TDM.Neo4j;
+
+import org.neo4j.graphdb.RelationshipType;
+
+public enum Relationship implements RelationshipType {
+	role, directed, movie_genre
+}
