@@ -1,0 +1,18 @@
+import java.util.ArrayList;
+
+public class SubgraphMining {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+
+	}
+
+}
+class Graph{
+	ArrayList<GraphNode> nodes = new ArrayList();
+	
+}
+
+class GraphNode{
+	ArrayList<GraphNode> edges = new ArrayList();
+}

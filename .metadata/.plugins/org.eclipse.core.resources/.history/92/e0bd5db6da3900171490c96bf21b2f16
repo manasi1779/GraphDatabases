@@ -1,0 +1,538 @@
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+
+import org.neo4j.graphdb.Direction;
+import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Label;
+import org.neo4j.graphdb.Node;
+import org.neo4j.graphdb.Relationship;
+import org.neo4j.graphdb.RelationshipType;
+import org.neo4j.graphdb.ResourceIterable;
+import org.neo4j.graphdb.ResourceIterator;
+import org.neo4j.graphdb.Transaction;
+import org.neo4j.graphdb.factory.GraphDatabaseFactory;
+import org.neo4j.graphdb.factory.GraphDatabaseSettings;
+
+public class SubgraphMining {
+	
+	GraphDatabaseService db;
+	File dbpath;
+	Graph bestSupportCandidate;
+	Graph mostConfidentCandidate;
+	Graph bestFMeasureCandidate;
+
+	
+	public static void main(String[] args) throws Exception {
+		SubgraphMining subgraphMiner = new SubgraphMining();
+		subgraphMiner.initCandidates();
+	}
+	
+	public SubgraphMining(){
+		dbpath = new File("D:/neo4j-enterprise-3.1.1-windows/neo4j-enterprise-3.1.1/data/databases/graph.db");
+		db = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(dbpath).setConfig(GraphDatabaseSettings.pagecache_memory, "2G" ).setConfig(GraphDatabaseSettings.string_block_size, "60" ).setConfig(GraphDatabaseSettings.array_block_size, "50" ).newGraphDatabase();
+		Graph dummyGraph = new Graph();
+		dummyGraph.support = -1; dummyGraph.count=4000;
+		bestSupportCandidate = new Graph();
+		bestSupportCandidate.parentGraph = dummyGraph;
+		bestSupportCandidate.support = -1;
+		
+		mostConfidentCandidate = new Graph();
+		mostConfidentCandidate.parentGraph = dummyGraph;
+		mostConfidentCandidate.support = -1;
+		
+		bestFMeasureCandidate = new Graph();
+		bestFMeasureCandidate.parentGraph = dummyGraph;
+		bestFMeasureCandidate.support = -1;
+		
+	}
+
+	public void initCandidates() throws Exception{
+		Transaction tx = db.beginTx();
+		
+		ResourceIterable<Relationship> primitiveGraphs = db.getAllRelationships();
+		ArrayList<Graph> candidateGraphs = new ArrayList();
+		
+		Graph originGraph = new Graph();
+		originGraph.support= 1;
+		for(Relationship relation: primitiveGraphs){
+			if(relation.isType(RelationshipType.withName("visited"))){
+				Graph graph = new Graph(relation);
+				graph.parentGraph = originGraph;
+				candidateGraphs.add(graph);
+			}
+			originGraph.count++;
+		}
+		candidateGeneration(candidateGraphs, 1);
+		tx.close();		
+	}	
+	
+	
+	public void updateBestCandidate(Graph candidate)
+	{		
+		if(candidate.support > bestSupportCandidate.support ){
+			bestSupportCandidate = candidate;
+		}
+		if(candidate.getConfidence() > mostConfidentCandidate.getConfidence()){
+			mostConfidentCandidate = candidate;
+		}
+		if(candidate.getFMeasure() > bestFMeasureCandidate.getFMeasure()){
+			bestFMeasureCandidate = candidate;
+		}
+		
+		
+	}
+	
+	
+	/**
+	 * Extend candidates until a certain depth
+	 * @param graph
+	 * @param iteration
+	 * @throws Exception 
+	 */
+	public void candidateGeneration(ArrayList<Graph> graphs, int iteration) throws Exception{
+		System.out.println("============ Iteration ======>\t"+iteration);
+		if(iteration == 10)
+			return;	
+		printBestValues();
+		ArrayList<Graph> candidateGraphs = new ArrayList<Graph>();
+		for(Graph graph: graphs){
+			if(!checkSupport(graph, graphs))
+				continue;
+			if(iteration != 1)
+				updateBestCandidate(graph);
+			
+			for(GraphNode graphNode: graph.nodeMap.values()){
+				//for every graph node in the current graph get all the relations 
+				Node node = db.getNodeById(graphNode.nodeId);
+				Iterable<Relationship> relations = node.getRelationships(Direction.OUTGOING);
+				// for every edge in the current node - try to add end node as a part of  the current graph
+				for(Relationship relation: relations){
+					//get copy of current graph				
+					if(!graph.traversedPaths.contains(relation)){
+						
+						Graph extendCandidate = graph.getExtendedGraph(relation, node);
+					
+						if(checkIsomorphism(extendCandidate)){	
+							candidateGraphs.add(extendCandidate);
+						}
+					}
+				}			
+			}			
+		}
+		candidateGeneration(candidateGraphs, iteration+1);
+	}	
+	
+	
+	private void printBestValues() {
+		System.out.println("\n\n\nBest F Measure Candidate: "+bestFMeasureCandidate.getFMeasure());
+		bestFMeasureCandidate.printEdgeOrder();
+		System.out.println("\n\n\nMost Confident Candidate: "+mostConfidentCandidate.getConfidence());
+		printEdgeOrder(mostConfidentCandidate.edgeOrder);
+		System.out.println("\n\n\nBest Support: "+bestSupportCandidate.support);
+		printEdgeOrder(bestSupportCandidate.edgeOrder);
+		System.out.println(bestSupportCandidate.count+" parent:"+bestSupportCandidate.parentGraph.count);
+		
+	}
+
+	private boolean checkSupport(Graph graph, ArrayList<Graph> graphs) throws Exception {
+		int totalSize = graphs.size();
+		//if(graph.isomorph != null){
+		//	graph.setCount(graph.isomorph.count, (float)totalSize);
+		//}
+		//else{
+			countIsomorphs(graph, graphs);
+			graph.setCount(graph.count, (float)(totalSize));
+		//}		
+		if(graph.support > 0.10)
+			return true;
+		else
+			return false;
+	}
+
+	
+	
+
+	
+	
+	/***
+	 * for a given graph g and list of candidates, count the number of isomorphs 
+	 * @param query - g
+	 * @param targetList
+	 * @return count
+	 */
+	public void countIsomorphs(Graph query, ArrayList<Graph> targetList){
+		int count =0;
+		ArrayList<Long> queryNodeOrder = new ArrayList<Long>();
+		for(Long id: query.nodeMap.keySet()){
+			queryNodeOrder.add(id);
+		}
+		for(Graph targetGraph : targetList){
+			HashMap<Long, List<GraphNode>> searchSpace = getSearchSpace(query, targetGraph);
+			HashMap<Long, Long> initialSolution = new HashMap<Long, Long>();
+			if(search(0, searchSpace, initialSolution, queryNodeOrder, query, targetGraph)){
+				count++;
+				targetGraph.isomorph = query;
+			}
+		}
+		query.count = count;
+	}
+	
+	/***
+	 * Constructs a search space map for a given query graph to target graph
+	 * @param query
+	 * @param data
+	 * @return  querygraphNode id --> Mapped to List of Data graph nodes
+	 */
+	public HashMap<Long, List<GraphNode>> getSearchSpace(Graph query, Graph data){
+		Collection<GraphNode> queryNodes = query.nodeMap.values();
+		//Collection<GraphNode> dataNodes = data.nodeMap.values();
+		HashMap<Long, List<GraphNode>> searchSpace = new HashMap<Long, List<GraphNode>>();
+		
+		for(GraphNode queryNode : queryNodes){
+			List<GraphNode> dNodes = data.getNodesWithLabel(queryNode.type);
+			searchSpace.put(queryNode.nodeId, dNodes);
+		}
+		return searchSpace;
+	}
+	
+	public void printSearchSpace(HashMap<Long, Long> solution){
+		for(long key: solution.keySet()){
+			System.out.print(key+":"+solution.get(key)+" ");
+		}
+		System.out.println();
+	}
+
+	
+	public boolean search(int i, HashMap<Long, List<GraphNode>> defaultSearchSpace, HashMap<Long, Long> solution, ArrayList<Long> queryNodeOrder, Graph query, Graph target){
+		
+		if(i >= queryNodeOrder.size()){
+			//printSearchSpace(solution);
+			return true;
+		}
+		
+		// refers to the node id (u-i) we are looking to map in the query
+		Long currentQueryNodeId = queryNodeOrder.get(i);
+		//get possible matchings for the given query node (u-i)
+		List<GraphNode> nodes = defaultSearchSpace.get(currentQueryNodeId);
+		for(GraphNode node: nodes){
+			if( (!solution.values().contains(node.nodeId)) && canMap(currentQueryNodeId, node.nodeId, i, queryNodeOrder, query, target, solution)){
+				solution.put(currentQueryNodeId, node.nodeId);				
+				if(search(i+1, defaultSearchSpace, solution, queryNodeOrder, query, target)){
+					return true;
+				}
+				solution.remove(currentQueryNodeId);
+			}
+		}
+		return false;
+	}
+	
+	
+	
+	/**
+	 * Check if the targetTo node can be a part of solution
+	 * @param queryNodeId - source node id to be mapped
+	 * @param targetToId  - target node id 
+	 * @param index
+	 * @param queryNodeOrder
+	 * @param query
+	 * @param target
+	 * @param solution
+	 * @return 
+	 */
+	public boolean canMap(long queryNodeId, long targetToId, int index, ArrayList<Long> queryNodeOrder, Graph query, Graph target, HashMap<Long, Long> solution){
+		for(int i = 0; i < index; i++){
+			//if there is an edge from query-i to query-index check if there is an edge to the corresponding matched solution
+			if(query.edgeExists(queryNodeOrder.get(i), queryNodeId)){
+				Long targetFrom = solution.get(queryNodeOrder.get(i));
+				if(!target.edgeExists(targetFrom, targetToId))
+					return false;
+			}
+		}
+		return true;
+	}
+	
+	
+	
+	
+	/**
+	 * Check if the graph follows edge order
+	 * @param graph
+	 * @return
+	 */
+	public boolean checkIsomorphism(Graph graph){
+		ArrayList<GraphNode[]> canonicalCode= graph.getCanonicalCode();
+		ArrayList<GraphNode[]> edgeOrder= graph.edgeOrder;
+		try {		
+			if(canonicalCode.size() != edgeOrder.size()){
+			//printEdgeOrder(canonicalCode);	
+			throw new InvalidCanonicalCode(canonicalCode.size() , edgeOrder.size());
+			}
+		} catch (InvalidCanonicalCode e) {
+				e.printStackTrace();
+				System.exit(1);
+		}
+		for(int i = 0; i < canonicalCode.size(); i++){
+			GraphNode[] pair1 = canonicalCode.get(i);
+			GraphNode[] pair2 = edgeOrder.get(i);
+			if(! (pair1[0].equals(pair2[0]) && pair1[1].equals(pair2[1])) )
+				return false;
+		}
+		return true;
+	}	
+	
+}
+
+class Graph{
+	HashMap<Long, GraphNode> nodeMap = new HashMap<Long, GraphNode>();
+	ArrayList<Relationship> traversedPaths = new ArrayList<Relationship>();
+	ArrayList<GraphNode[]> edgeOrder = new ArrayList<GraphNode[]>();
+	Graph parentGraph = null;
+	float support;
+	float count;
+	Graph isomorph = null;
+	
+	public List<GraphNode> getNodesWithLabel(String label){
+		List<GraphNode> nodeswithLabels = new LinkedList<GraphNode>();
+		for(GraphNode node : nodeMap.values()){
+			if(node.type.equals(label))
+				nodeswithLabels.add(node);
+		}
+		
+		return nodeswithLabels;
+	}
+	
+	public float getFMeasure() {
+		float confidence = this.getConfidence();
+		float FMeasure = 2*confidence*support/(confidence+support);
+		return FMeasure;
+	}
+
+	void printEdgeOrder() {
+		for(GraphNode[] pair: edgeOrder){
+			System.out.format("%s: %s ", pair[0], pair[1]);
+		}
+		System.out.println();
+	}
+	
+	public void setCount(float count, float total) throws Exception {
+		if(count > parentGraph.count){
+			printEdgeOrder();
+			throw new Exception("Count can't be above Parent");
+		}
+			
+		this.count = count;
+		support = count/total;
+	}
+	
+	public float getConfidence(){
+		return count/parentGraph.count;
+	}
+
+	public Graph(){
+		
+	}
+	
+	public boolean edgeExists(Long from, Long to){
+		GraphNode fromNode = nodeMap.get(from);
+		for(GraphNode otherNode:  fromNode.edges){
+			if(otherNode.nodeId == to)
+				return true;
+		}
+		return false;
+	}	
+	
+	public Graph(Relationship relation){
+		Node startNode = relation.getStartNode();
+		Node endNode = relation.getEndNode();
+		GraphNode start = new GraphNode(startNode);
+		GraphNode end = new GraphNode(endNode); 
+		start.extendNode(end);
+		nodeMap.put(startNode.getId(), start);
+		nodeMap.put(endNode.getId(), end);
+		traversedPaths.add(relation);
+		GraphNode[] firstPath = new GraphNode[2];
+		firstPath[0]=start; firstPath[1]=end;
+		edgeOrder.add(firstPath);
+		
+	}
+	
+	public ArrayList<GraphNode[]> getEdgeOrder(){
+		return edgeOrder;
+	}
+	
+	/**
+	 * generate new graph instance from the current instance by adding a new relation
+	 * @param relation
+	 * @param node
+	 */	
+	public Graph getExtendedGraph(Relationship relation, Node node){
+		Graph newGraph = getCopy();
+		newGraph.parentGraph = this;
+		newGraph.extendGraph(relation, node);
+		return newGraph;
+	}
+	
+	private Graph getCopy(){
+		Graph newGraph = new Graph();
+		
+		//Clone the graph to a new graph - create new hash map with pointers to new nodes
+		newGraph.nodeMap = new HashMap<Long, GraphNode>();
+	   Set<Long> nodeIds= nodeMap.keySet();
+	   for(Long nodeId : nodeIds){
+		   GraphNode currentIdNode = nodeMap.get(nodeId);
+		   GraphNode newNode = new GraphNode(currentIdNode);
+		   	newGraph.nodeMap.put(nodeId,  newNode);
+	   }
+	   
+	   //iterate over the edges of the current nodes, create edges in new nodes which point to the new nodes
+	   nodeIds= nodeMap.keySet();
+	   for(Long nodeId : nodeIds){
+		   	GraphNode currentNode = nodeMap.get(nodeId);
+		   	GraphNode newNode = newGraph.nodeMap.get(nodeId);
+		   	for(GraphNode neighbor :  currentNode.edges ){
+		   				Long neighborId = neighbor.nodeId;
+		   				GraphNode newNeighborNode = newGraph.nodeMap.get(neighborId);
+		   				newNode.extendNode(newNeighborNode);
+		   	}	   
+	   }	   
+	   	newGraph.traversedPaths.addAll(traversedPaths);
+		newGraph.edgeOrder.addAll(edgeOrder);
+		return newGraph;
+	}
+	
+	/**
+	 * Extends existing graph to add new edge from start node to end node
+	 * @param relation
+	 * @param node
+	 */
+	private void extendGraph(Relationship relation, Node node){
+		Node endNode = relation.getOtherNode(node);
+		GraphNode extendNode;	
+		GraphNode[]  newPath = new GraphNode[2];
+		GraphNode currentNode = nodeMap.get(node.getId());
+		newPath[0] = currentNode;
+		//add a back edge to existing node
+		if(nodeMap.containsKey(endNode.getId())){
+			extendNode = nodeMap.get(endNode.getId());
+			currentNode.extendNode(extendNode);
+			newPath[1] = nodeMap.get(endNode.getId());
+		}
+		//add a front edge
+		else{
+			GraphNode newNode = new GraphNode(endNode);
+			nodeMap.put(endNode.getId(), newNode);
+			currentNode.extendNode(newNode);
+			newPath[1] = newNode;
+		}		
+		edgeOrder.add(newPath);
+		traversedPaths.add(relation);
+	}
+	
+	/**
+	 * Given any graph it returns the canonical code 
+	 * @param graph
+	 * @return
+	 */
+	public ArrayList<GraphNode[]> getCanonicalCode(){
+		ArrayList<GraphNode> sortedNodes = new ArrayList<GraphNode>(this.nodeMap.values());
+		Collections.sort(sortedNodes);
+		//iterate through nodes and generate the 
+		HashSet<GraphNode> visitedNodes = new HashSet<GraphNode>();
+		ArrayList<GraphNode[]> allPaths = new ArrayList<GraphNode[]>();
+		//iterate over every node and get DFS path from
+		for(GraphNode nextStartNode: sortedNodes){
+			if(!visitedNodes.contains(nextStartNode))
+				allPaths.addAll(getMinDFSPath(nextStartNode, visitedNodes));
+		}
+		return allPaths;
+	}
+	
+	
+	/**
+	 * Perform a DFS from the current node - edges selected in the order of 
+	 * @param node
+	 * @param visitedNodes
+	 * @return
+	 */
+	private ArrayList<GraphNode[]> getMinDFSPath(GraphNode node, HashSet<GraphNode> visitedNodes){
+		ArrayList<GraphNode[]> allPaths = new ArrayList<GraphNode[]>();
+		ArrayList<GraphNode> edges = node.edges;
+		Collections.sort(edges);
+		visitedNodes.add(node);
+		//visit the edges
+		for(GraphNode neighbor: edges){
+			GraphNode[] path = new GraphNode[2];
+			path[0] = node;
+			path[1] = neighbor;
+			//add the path to the neighbor
+			allPaths.add(path);
+			//if the neighbor has not been visited => visit the neighbor
+			if(!visitedNodes.contains(neighbor)){
+					ArrayList<GraphNode[]> neighborPaths =getMinDFSPath(neighbor, visitedNodes);
+					allPaths.addAll(neighborPaths);
+			}
+		}
+		return allPaths;
+	}
+	
+}
+
+
+
+
+/**
+ * A prototype representing the nodes in the candidate graph
+ * @author Lakshmi Ravi
+ * @author Manasi 
+ *
+ */
+class GraphNode implements Comparable<GraphNode>{
+	String type;	 
+	Long nodeId;
+	ArrayList<GraphNode> edges = new ArrayList<GraphNode>();
+	
+	public GraphNode(Node node){
+		this.type = node.getLabels().iterator().next().name();
+		this.nodeId = node.getId();
+	}
+	
+	public GraphNode(GraphNode n)
+	{
+		this.type = n.type;
+		this.nodeId = n.nodeId;
+	}
+
+	public void extendNode(GraphNode otherNode){
+		edges.add(otherNode);
+	}
+	
+	@Override
+	public int compareTo(GraphNode otherNode) {
+		return (int) (this.nodeId- otherNode.nodeId);
+	}	
+	
+	@Override
+	public String toString(){
+		return type+"-"+nodeId;
+	}
+	
+	@Override
+	public boolean equals(Object otherNode){
+		return nodeId.equals(((GraphNode)otherNode).nodeId);
+	}
+	
+	@Override
+	public int hashCode(){
+		return nodeId.intValue();
+	}
+}
+

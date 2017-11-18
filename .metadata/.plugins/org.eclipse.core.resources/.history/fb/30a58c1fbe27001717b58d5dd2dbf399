@@ -1,0 +1,85 @@
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashSet;
+
+import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Node;
+import org.neo4j.graphdb.Relationship;
+import org.neo4j.graphdb.factory.GraphDatabaseFactory;
+import org.neo4j.graphdb.factory.GraphDatabaseSettings;
+
+public class SubgraphMining {
+	
+	GraphDatabaseService db;
+	File dbpath;
+	
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+
+	}
+	
+	public SubgraphMining(){
+		dbpath = new File("D:/neo4j-enterprise-3.1.1-windows/neo4j-enterprise-3.1.1/data/databases/graph.db");
+		db = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(dbpath).setConfig(GraphDatabaseSettings.pagecache_memory, "2G" ).setConfig(GraphDatabaseSettings.string_block_size, "60" ).setConfig(GraphDatabaseSettings.array_block_size, "50" ).newGraphDatabase();
+	}
+
+	public void initCandidates(){
+		HashSet<Relationship> primitiveGraphs = new HashSet();
+		for(Relationship relation: primitiveGraphs){
+			Graph graph = new Graph(relation);
+			extendCandidate(graph);
+		}
+	}
+	
+	
+	public void extendCandidate(Graph graph){
+		
+	}
+	
+	public void followsEdgeOrder(){
+		
+	}
+	
+}
+
+class Graph{
+	ArrayList<GraphNode> nodes = new ArrayList();
+	ArrayList<Node[]> nodePairs = new ArrayList();
+	HashSet<Relationship> traversedPaths = new HashSet();
+	
+	public Graph(Relationship relation){
+		String label1 = relation.getStartNode().getLabels().iterator().next().name();
+		String label2 = relation.getEndNode().getLabels().iterator().next().name();
+		GraphNode start = new GraphNode(label1);
+		GraphNode end = new GraphNode(label2);
+		nodes.add(start);
+		nodes.add(end);
+		traversedPaths.add(relation);
+		
+	}
+	
+	public void addNodes(){
+		
+	}
+	
+	public void addNodePair(Relationship relation){
+		Node[] nodePair = new Node[2];
+		nodePair[0] = relation.getStartNode();
+		nodePair[1] = relation.getEndNode();
+		nodePairs.add(nodePair);
+	}
+	
+	public Graph extendGraph(Graph graph, Relationship relation){
+		return graph;
+	}
+	
+}
+
+class GraphNode{
+	String type;	 
+	ArrayList<GraphNode> edges = new ArrayList();
+	
+	public GraphNode(String type){
+		this.type = type;
+	}
+}

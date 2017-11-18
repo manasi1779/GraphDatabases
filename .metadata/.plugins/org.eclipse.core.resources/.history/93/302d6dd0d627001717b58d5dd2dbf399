@@ -1,0 +1,120 @@
+import java.io.File;
+import java.util.ArrayList;
+import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Node;
+import org.neo4j.graphdb.Relationship;
+import org.neo4j.graphdb.ResourceIterable;
+import org.neo4j.graphdb.Transaction;
+import org.neo4j.graphdb.factory.GraphDatabaseFactory;
+import org.neo4j.graphdb.factory.GraphDatabaseSettings;
+
+public class SubgraphMining {
+	
+	GraphDatabaseService db;
+	File dbpath;
+	
+	public static void main(String[] args) {
+		SubgraphMining subgraphMiner = new SubgraphMining();
+		subgraphMiner.initCandidates();
+	}
+	
+	public SubgraphMining(){
+		dbpath = new File("D:/neo4j-enterprise-3.1.1-windows/neo4j-enterprise-3.1.1/data/databases/graph.db");
+		db = new GraphDatabaseFactory().newEmbeddedDatabaseBuilder(dbpath).setConfig(GraphDatabaseSettings.pagecache_memory, "2G" ).setConfig(GraphDatabaseSettings.string_block_size, "60" ).setConfig(GraphDatabaseSettings.array_block_size, "50" ).newGraphDatabase();
+	}
+
+	public void initCandidates(){
+		Transaction tx = db.beginTx();
+		ResourceIterable<Relationship> primitiveGraphs = db.getAllRelationships();
+		for(Relationship relation: primitiveGraphs){
+			Graph graph = new Graph();
+			graph = graph.extendGraph(relation);
+			System.out.println(graph.lastNode);
+			extendCandidate(graph, 1);
+		}
+		tx.success();
+		tx.close();
+	}
+	
+	
+	public void extendCandidate(Graph graph, int iteration){
+		if(iteration == 100)
+			return;
+		
+		Iterable<Relationship> relations = graph.lastNode.getRelationships();
+		for(Relationship relation: relations){
+			if(!graph.traversedPaths.contains(relation)){
+				if(followsEdgeOrder(graph, relation)){
+					System.out.println("Extending "+relation.getId());
+					graph.extendGraph(relation);
+					extendCandidate(graph, iteration+1);
+				}
+			}
+		}			
+	}
+	
+	//can this work
+	public boolean followsEdgeOrder(Graph graph, Relationship relation){
+		if(graph.traversedPaths.get(graph.traversedPaths.size() - 1).getId() < relation.getId() )
+			return true;
+		else
+			return false;
+	}	
+	
+	public boolean checkIsomorphism(Graph graph){
+		return true;
+	}
+}
+
+class Graph{
+	ArrayList<GraphNode> nodes = new ArrayList();
+	ArrayList<Node[]> nodePairs = new ArrayList();
+	ArrayList<Relationship> traversedPaths = new ArrayList();
+	Node lastNode;
+	
+
+	public void addNodes(Relationship relation){
+		String label1 = relation.getStartNode().getLabels().iterator().next().name();
+		String label2 = relation.getEndNode().getLabels().iterator().next().name();
+		GraphNode start = new GraphNode(label1);
+		GraphNode end = new GraphNode(label2);
+		nodes.add(start);
+		nodes.add(end);
+	}
+	
+	public void addNodePair(Relationship relation){
+		Node[] nodePair = new Node[2];
+		nodePair[0] = relation.getStartNode();
+		nodePair[1] = relation.getEndNode();
+		nodePairs.add(nodePair);
+	}
+	
+	public Graph getExtendedGraph(Relationship relation){
+		Graph newGraph = new Graph();
+		newGraph.nodes.addAll(nodes);
+		newGraph.nodePairs.addAll(nodePairs);
+		newGraph.traversedPaths.addAll(traversedPaths);
+		newGraph.addNodes(relation);
+		newGraph.addNodePair(relation);
+		newGraph.traversedPaths.add(relation);
+		newGraph.lastNode = relation.getEndNode();
+		return newGraph;
+	}
+	
+	public void extendGraph(Relationship relation){
+		addNodes(relation);
+		addNodePair(relation);
+		traversedPaths.add(relation);
+		lastNode = relation.getEndNode();
+	}
+	
+}
+
+class GraphNode{
+	String type;	 
+	ArrayList<GraphNode> edges = new ArrayList();
+	
+	public GraphNode(String type){
+		this.type = type;
+	}
+}

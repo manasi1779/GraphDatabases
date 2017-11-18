@@ -1,0 +1,25 @@
+import java.util.ArrayList;
+import java.util.HashSet;
+
+import org.neo4j.graphdb.Node;
+
+public class SubgraphMining {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+
+	}
+
+	
+	
+}
+
+class Graph{
+	ArrayList<GraphNode> nodes = new ArrayList();
+	ArrayList<Node[]> nodePairs = new ArrayList();
+	HashSet<Relationship> traversedPaths = new HashSet();
+}
+
+class GraphNode{
+	ArrayList<GraphNode> edges = new ArrayList();
+}

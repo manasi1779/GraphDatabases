@@ -2,12 +2,16 @@
 <section name="Workbench">
 	<section name="MavenProjectWizardArtifactPage">
 		<list key="groupId">
+			<item value="FrequentSubgraphMining"/>
+			<item value="FSM"/>
 			<item value="Proteins"/>
 		</list>
 		<list key="name">
+			<item value="FrequentSubgraphMining"/>
 			<item value="Proteins"/>
 		</list>
 		<list key="artifactId">
+			<item value="FSM"/>
 			<item value="Graph"/>
 		</list>
 		<list key="projectNameTemplate">
@@ -45,8 +49,22 @@
 			<item value="[name]"/>
 		</list>
 	</section>
+	<section name="wizardPage">
+		<list key="groupId">
+			<item value="Capstone"/>
+		</list>
+		<list key="name">
+		</list>
+		<list key="artifactId">
+			<item value="Capstone"/>
+		</list>
+		<list key="version">
+			<item value="0.0.1-SNAPSHOT"/>
+		</list>
+	</section>
 	<section name="MavenProjectWizardLocationPage">
 		<list key="location">
+			<item value="C:\Manasi\workspace\GraphDatabases"/>
 			<item value="C:\Manasi\workspace\TDM"/>
 			<item value="C:\Manasi\workspace\TDM\RelationalDB\src\Transactions.java"/>
 		</list>

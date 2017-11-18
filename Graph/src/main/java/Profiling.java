@@ -68,7 +68,7 @@ public class Profiling {
 				endNodes.add(ownlabels.next().name());
 			}
 			for(Relationship relation: relationships){
-				Iterator<Label> labels = relation.getEndNode().getLabels().iterator();				
+				Iterator<Label> labels = relation.getOtherNode(node).getLabels().iterator();				
 				while(labels.hasNext()){
 					endNodes.add(labels.next().name());
 				}

@@ -1,0 +1,238 @@
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.neo4j.graphdb.Label;
+import org.neo4j.graphdb.RelationshipType;
+import org.neo4j.unsafe.batchinsert.BatchInserter;
+import org.neo4j.unsafe.batchinsert.BatchInserters;
+
+/**
+ * 
+ * @author Manasi Bharde & Lakshmi Ravi
+ * This class contains methods to load FourSquare data to Neo4j.
+ * 
+ */
+public class LoadData {
+
+	File dbpath;
+	static long USER_OFFSET= 0;
+	static long VENUE_OFFSET= 8000000;
+	BatchInserter insert;
+
+	public static void main(String[] args) {
+		LoadData loadData = new LoadData();
+		loadData.loadDataToNeo4j();
+	}
+
+	public LoadData() {
+		dbpath = new File("D:/neo4j-enterprise-3.1.1-windows/neo4j-enterprise-3.1.1/data/databases/graph.db");
+	}
+
+	/**
+	 * Initializes Neo4j and loads data
+	 */
+	public void loadDataToNeo4j() {
+		try {
+			Map<String, String> config = new HashMap<String, String>();
+			config.put("cache_type", "weak");
+			config.put("use_memory_mapped_buffers", "true");
+			config.put("neostore.nodestore.db.mapped_memory", "3G");
+			config.put("neostore.relationshipstore.db.mapped_memory", "2G");
+			config.put("neostore.propertystore.db.mapped_memory", "500M");
+			config.put("neostore.propertystore.db.strings.mapped_memory", "500M");
+			config.put("neostore.propertystore.db.arrays.mapped_memory", "500M");
+			config.put("neostore.propertystore.db.index.keys.mapped_memory", "5M");
+			config.put("dbms.jvm.additional", "XX:+UseG1GC");
+			insert = BatchInserters.inserter(dbpath);
+			readUserData();
+			readVenueData();
+			createRatingRelationship();
+			createFriendRelationship();
+			insert.shutdown();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * Reads user data
+	 */
+	public void readUserData() {
+		System.out.println("Loading User data");
+
+		try {
+			ClassLoader classLoader = getClass().getClassLoader();
+			File file = new File(classLoader.getResource("users.csv").getFile());
+			BufferedReader fileReader = new BufferedReader(new FileReader(file));
+			String line;
+			fileReader.readLine();
+			int i = 0;
+
+			while ((line = fileReader.readLine()) != null) {
+				String[] values = line.split(",");
+				//
+				i++;
+				if (i == 1000)
+					break;
+				if (values.length == 3) {
+					HashMap<String, Object> userPropertiesMap = new HashMap<String, Object>();
+					userPropertiesMap.put("Latitude", values[1]);
+					userPropertiesMap.put("Longtitude", values[2]);
+					insert.createNode(Long.parseLong(values[0]) + USER_OFFSET, userPropertiesMap,
+							Label.label("user"));
+
+				}
+			}
+			fileReader.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * Creates location ID
+	 * @param lat
+	 * @param lon
+	 * @param valuesMap
+	 * @return
+	 */
+	public static Long getLocationId(String lat, String lon, HashMap<String, Double> valuesMap) {
+		Double longitude = Double.parseDouble(lon) + 180;
+		DecimalFormat df = new DecimalFormat("#.#");
+		longitude = Double.parseDouble(df.format(longitude));
+		// System.out.println(longitude);
+		Double latitude = Double.parseDouble(lat) + 90;
+		latitude = Double.parseDouble(df.format(latitude));
+		// System.out.println(latitude);
+		Long locationId = (long) (longitude * 100000 + latitude * 10);
+		valuesMap.put("latitude", latitude);
+		valuesMap.put("longitude", longitude);
+		// System.out.println(locationId);
+		return locationId;
+	}
+
+	/**
+	 * Reads venue data
+	 */
+	public void readVenueData() {
+		System.out.println("Loading venue data");
+	
+		try {
+			ClassLoader classLoader = getClass().getClassLoader();
+			File file = new File(classLoader.getResource("venues.csv").getFile());
+			BufferedReader fileReader = new BufferedReader(new FileReader(file));
+			String line;
+			fileReader.readLine();
+			int i = 0;
+			while ((line = fileReader.readLine()) != null) {
+				i++;
+				if (i == 10000)
+					break;
+				String[] values = line.split(",");
+				if (values.length == 3) {
+					HashMap<String, Object> venueProperties = new HashMap<String, Object>();
+					venueProperties.put("Latitude", values[1]);
+					venueProperties.put("Longtitude", values[2]);
+					insert.createNode(Long.parseLong(values[0]) + VENUE_OFFSET, venueProperties,
+							Label.label("venue"));
+				}
+			}
+			fileReader.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		System.out.println("Venue data loaded");
+	}
+
+	/**
+	 * Creates visited relationship between nodes
+	 */
+	public void createRatingRelationship() {
+		try {
+			ClassLoader classLoader = getClass().getClassLoader();
+			File file = new File(classLoader.getResource("ratings.csv").getFile());
+			BufferedReader fileReader = new BufferedReader(new FileReader(file));
+			String line;
+			fileReader.readLine();
+			String[] values = fileReader.readLine().split(",");
+			while (true) {
+				Long id1 = Long.parseLong(values[0]);
+				Long id2 = Long.parseLong(values[1]);
+				ArrayList<String> ratings = new ArrayList<String>();
+				ratings.add(values[2]);
+				while ((line = fileReader.readLine()) != null) {
+					values = line.split(",");
+					if (values[0].equals(id1 + "") && values[1].equals(id2 + "")) {
+						ratings.add(values[2]);
+					} else {
+						break;
+					}
+				}
+				HashMap<String, Object> valuesMap = new HashMap<String, Object>();
+				String[] ratingsArray = new String[ratings.size()];
+				ratingsArray = ratings.toArray(ratingsArray);
+				valuesMap.put("ratings", ratingsArray);
+				int sum = 0, count = 0;
+				for (String rating : ratings) {
+					count++;
+					sum += Integer.parseInt(rating);
+				}
+				valuesMap.put("count", count);
+				valuesMap.put("avg_rating", (float) sum / (float) count);
+				if (insert.nodeExists(id1 + USER_OFFSET) && insert.nodeExists(id2 + VENUE_OFFSET)) {
+					insert.createRelationship(id1 + USER_OFFSET, id2 + VENUE_OFFSET,
+							RelationshipType.withName("visited"), valuesMap);
+				}
+				if (line == null) {
+					break;
+				}
+			}
+			fileReader.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
+	}
+	
+	/**
+	 * Creates friend relationship between nodes
+	 */
+	public void createFriendRelationship() {
+		try {
+			ClassLoader classLoader = getClass().getClassLoader();
+			File file = new File(classLoader.getResource("socialgraph.csv").getFile());
+			BufferedReader fileReader = new BufferedReader(new FileReader(file));
+			String line;
+			fileReader.readLine();
+			while ((line = fileReader.readLine()) != null) {
+				String[] values = line.split(",");
+				Long id1 = Long.parseLong(values[0]) + USER_OFFSET;
+				Long id2 = Long.parseLong(values[1]) + USER_OFFSET;
+				if (insert.nodeExists(id1) && insert.nodeExists(id2)) {
+					insert.createRelationship(id1, id2, RelationshipType.withName("friend"), null);
+				}
+				// Ignoring alternate lines since edges are bidirectional
+				fileReader.readLine();
+			}
+			fileReader.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+}

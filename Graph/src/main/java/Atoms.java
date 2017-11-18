@@ -22,8 +22,7 @@ public enum Atoms implements Label{
 			}		
 			case "B":{
 				return B;
-			}
-			
+			}			
 		}
 		return null;
 	}
